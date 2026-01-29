@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Validador de Documentos Profissional</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; display: flex; justify-content: center; padding: 20px; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 900px; }
+        h2 { color: #2c3e50; text-align: center; margin-bottom: 20px; }
+        
+        .upload-section { display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; border: 2px dashed #3498db; padding: 20px; border-radius: 8px; text-align: center; }
+        
+        button { padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.3s; margin: 5px; }
+        .btn-primary { background: #3498db; color: white; width: 100%; font-size: 16px; }
+        .btn-success { background: #27ae60; color: white; display: none; }
+        .btn-danger { background: #c0392b; color: white; display: none; }
+        .btn-warning { background: #e67e22; color: white; display: none; }
+        button:disabled { background: #bdc3c7; cursor: not-allowed; }
+
+        .progress-container { width: 100%; background: #eee; border-radius: 10px; height: 25px; margin: 20px 0; display: none; overflow: hidden; }
+        .progress-bar { height: 100%; width: 0%; background: #2ecc71; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; }
+
+        #log { background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 5px; height: 350px; overflow-y: auto; font-family: monospace; font-size: 13px; line-height: 1.5; }
+        .status-2 { color: #2ecc71; } /* Ativa */
+        .status-8 { color: #e74c3c; } /* Baixada */
+        .status-other { color: #f1c40f; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🏢 Validador de CNPJ</h2>
+    
+    <div class="upload-section">
+        <input type="file" id="fileInput" accept=".txt">
+        <button id="btnIniciar" class="btn-primary">🚀 Iniciar Validação em Lote</button>
+    </div>
+
+    <div class="progress-container" id="progressCont">
+        <div class="progress-bar" id="progressBar">0%</div>
+    </div>
+
+    <div id="log">Aguardando arquivo...</div>
+
+    <div style="text-align: center; margin-top: 20px;">
+        <button id="btnExportarTudo" class="btn-success">📥 Relatório Completo</button>
+        <button id="btnExportarNaoAtivos" class="btn-danger">📥 Baixar Apenas Não Ativos</button>
+        <button id="btnExportarErros" class="btn-warning">📥 Inconsistências (Não Encontrados)</button>
+    </div>
+</div>
+
+<script>
+    const statusTraducao = {
+        "1": "NULA",
+        "2": "ATIVA",
+        "3": "SUSPENSA",
+        "4": "INAPTA",
+        "8": "BAIXADA"
+    };
+
+    let baseSucesso = [];
+    let baseNaoAtivos = [];
+    let baseFalhas = [];
+
+    const btnIniciar = document.getElementById('btnIniciar');
+    const fileInput = document.getElementById('fileInput');
+    const log = document.getElementById('log');
+    const progressBar = document.getElementById('progressBar');
+    const progressCont = document.getElementById('progressCont');
+    const btnExportarTudo = document.getElementById('btnExportarTudo');
+    const btnExportarNaoAtivos = document.getElementById('btnExportarNaoAtivos');
+    const btnExportarErros = document.getElementById('btnExportarErros');
+
+    btnIniciar.onclick = async () => {
+        const file = fileInput.files[0];
+        if (!file) return alert("Selecione um arquivo .txt");
+
+        const texto = await file.text();
+        const linhas = texto.split(/\r?\n/).map(l => l.replace(/\D/g, "")).filter(l => l.length >= 11);
+
+        baseSucesso = [];
+        baseNaoAtivos = [];
+        baseFalhas = [];
+        log.innerHTML = "Iniciando processo...<br>";
+        progressCont.style.display = "block";
+        btnIniciar.disabled = true;
+
+        for (let i = 0; i < linhas.length; i++) {
+            const doc = linhas[i];
+            updateProgress(i + 1, linhas.length);
+            
+            log.innerHTML += `> Verificando ${doc}... `;
+            let res = await consultarAPI(doc);
+
+            if (res.ok) {
+                const statusTxt = statusTraducao[res.status] || res.status;
+                const classe = `status-${res.status}`;
+                log.innerHTML += `<span class="${classe}">[OK] ${res.nome} | STATUS: ${statusTxt}</span><br>`;
+                
+                const linhaDados = `${doc};${res.nome};${statusTxt}`;
+                baseSucesso.push(linhaDados);
+                
+                // Se o status for diferente de 2 (ATIVA), vai para a lista de Não Ativos
+                if (res.status !== "2" && res.status !== 2) {
+                    baseNaoAtivos.push(linhaDados);
+                }
+            } else {
+                log.innerHTML += `<span class="status-8">[FALHA] Não encontrado nas APIs</span><br>`;
+                baseFalhas.push(doc);
+            }
+            log.scrollTop = log.scrollHeight;
+            
+            // Delay para evitar bloqueio por excesso de requisições
+            await new Promise(r => setTimeout(r, 1500));
+        }
+
+        finalizar();
+    };
+
+    async function consultarAPI(doc) {
+        // Tentativa 1: BrasilAPI
+        try {
+            const r = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${doc}`);
+            if (r.ok) {
+                const d = await r.json();
+                return { ok: true, nome: d.razao_social, status: String(d.situacao_cadastral) };
+            }
+        } catch (e) {}
+        return { ok: false };
+    }
+
+    function updateProgress(atual, total) {
+        const perc = Math.round((atual / total) * 100);
+        progressBar.style.width = perc + "%";
+        progressBar.innerText = perc + "%";
+    }
+
+    function finalizar() {
+        btnIniciar.disabled = false;
+        log.innerHTML += "<br><b>✅ Processo Concluído!</b>";
+        if (baseSucesso.length > 0) btnExportarTudo.style.display = "inline-block";
+        if (baseNaoAtivos.length > 0) btnExportarNaoAtivos.style.display = "inline-block";
+        if (baseFalhas.length > 0) btnExportarErros.style.display = "inline-block";
+    }
+
+    btnExportarTudo.onclick = () => baixarArquivo("DOCUMENTO;NOME;STATUS\n" + baseSucesso.join('\n'), "relatorio_completo.csv");
+    btnExportarNaoAtivos.onclick = () => baixarArquivo("DOCUMENTO;NOME;STATUS\n" + baseNaoAtivos.join('\n'), "apenas_nao_ativos.csv");
+    btnExportarErros.onclick = () => baixarArquivo(baseFalhas.join('\n'), "inconsistencias.txt");
+
+    function baixarArquivo(conteudo, nome) {
+        const blob = new Blob([conteudo], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nome;
+        a.click();
+    }
+</script>
+</body>
+</html>
