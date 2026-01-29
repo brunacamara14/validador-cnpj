@@ -51,29 +51,34 @@
     const statusTraducao = { "1": "NULA", "2": "ATIVA", "3": "SUSPENSA", "4": "INAPTA", "8": "BAIXADA" };
     let baseSucesso = []; let baseNaoAtivos = []; let baseFalhas = []; let baseDuplicados = [];
 
+    const btnIniciar = document.getElementById('btnIniciar');
+    const fileInput = document.getElementById('fileInput');
+    const logArea = document.getElementById('log');
+
     btnIniciar.onclick = async () => {
-        const file = document.getElementById('fileInput').files[0];
+        const file = fileInput.files[0];
         if (!file) return alert("Selecione um arquivo!");
 
         const texto = await file.text();
         const linhasBrutas = texto.split(/\r?\n/);
         
-        // --- MAPEAMENTO COM LINHA ORIGINAL ---
         let baseProcessamento = [];
         linhasBrutas.forEach((conteudo, index) => {
             let limpo = conteudo.replace(/\D/g, "");
             if (limpo.length === 14) {
-                baseProcessamento.push({ CNPJ: limpo, linha: index + 1 });
+                // Sincronizei para usar 'doc' como nome da propriedade
+                baseProcessamento.push({ doc: limpo, linha: index + 1 });
             }
         });
 
-        const vistos = new Map(); // Mapa para guardar o documento e sua primeira linha encontrada
+        const vistos = new Map(); 
         const unicos = [];
         baseDuplicados = [];
 
         baseProcessamento.forEach(item => {
             if (vistos.has(item.doc)) {
-                baseDuplicados.push(`LINHA: ${item.linha} | CNPJ: ${item.doc} | NOME: ${res.nome}`);
+                // Removi res.nome daqui, pois a API ainda não foi consultada
+                baseDuplicados.push(`LINHA ORIGINAL: ${item.linha} | CNPJ: ${item.doc} (Repetido da linha ${vistos.get(item.doc)}) |  NOME: ${res.nome}`);
             } else {
                 vistos.set(item.doc, item.linha);
                 unicos.push(item);
@@ -81,10 +86,10 @@
         });
 
         baseSucesso = []; baseNaoAtivos = []; baseFalhas = [];
-        document.getElementById('log').innerHTML = `📄 Linhas identificadas: ${baseProcessamento.length} | Únicos: ${unicos.length}<br><hr>`;
+        logArea.innerHTML = `📄 Linhas válidas: ${baseProcessamento.length} | Únicos: ${unicos.length}<br><hr>`;
         
         document.getElementById('progressCont').style.display = "block";
-        document.getElementById('btnIniciar').disabled = true;
+        btnIniciar.disabled = true;
 
         for (let i = 0; i < unicos.length; i++) {
             const item = unicos[i];
@@ -92,12 +97,12 @@
             document.getElementById('progressBar').style.width = perc + "%";
             document.getElementById('progressBar').innerText = perc + "%";
             
-            document.getElementById('log').innerHTML += `<span class="line-info">[L:${item.linha}]</span> Verificando ${item.doc}... `;
+            logArea.innerHTML += `<span class="line-info">[L:${item.linha}]</span> Verificando ${item.doc}... `;
             let res = await consultarAPI(item.doc);
 
             if (res.ok) {
                 const statusTxt = statusTraducao[res.status] || res.status;
-                document.getElementById('log').innerHTML += `<span class="status-${res.status}">[OK] ${res.nome} | ${statusTxt}</span><br>`;
+                logArea.innerHTML += `<span class="status-${res.status}">[OK] ${res.nome} | ${statusTxt}</span><br>`;
                 
                 const registroCompleto = `LINHA: ${item.linha} | CNPJ: ${item.doc} | NOME: ${res.nome} | STATUS: ${statusTxt}`;
                 baseSucesso.push(registroCompleto);
@@ -106,11 +111,11 @@
                     baseNaoAtivos.push(registroCompleto);
                 }
             } else {
-                document.getElementById('log').innerHTML += `<span class="status-8">[FALHA]</span><br>`;
-                baseFalhas.push(`LINHA: ${item.linha} | CNPJ: ${item.doc} | NOME: ${res.nome} | STATUS: ${statusTxt}`);
+                logArea.innerHTML += `<span class="status-8">[FALHA]</span><br>`;
+                baseFalhas.push(`LINHA: ${item.linha} | CNPJ: ${item.doc} | MOTIVO: Não encontrado na API`);
             }
-            document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
-            await new Promise(r => setTimeout(r, 1500)); // Rate limit
+            logArea.scrollTop = logArea.scrollHeight;
+            await new Promise(r => setTimeout(r, 1500)); // Rate limit anti-bloqueio
         }
         finalizar();
     };
@@ -127,8 +132,8 @@
     }
 
     function finalizar() {
-        document.getElementById('btnIniciar').disabled = false;
-        document.getElementById('log').innerHTML += "<br><b>✅ Concluído!</b>";
+        btnIniciar.disabled = false;
+        logArea.innerHTML += "<br><b>✅ Concluído!</b>";
         document.getElementById('btnExportarTudo').style.display = "inline-block";
         if (baseNaoAtivos.length > 0) document.getElementById('btnExportarNaoAtivos').style.display = "inline-block";
         if (baseDuplicados.length > 0) document.getElementById('btnExportarDuplicados').style.display = "inline-block";
