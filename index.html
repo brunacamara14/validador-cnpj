@@ -26,10 +26,10 @@
 <body>
 
 <div class="container">
-    <h2>🏢 Validador de CNPJ (Localizador por Linha)</h2>
+    <h2>🏢 Validador de CNPJ</h2>
     
     <div class="upload-section">
-        <input type="file" id="fileInput" accept=".txt">Escolher Arquivo</input>
+        <input type="file" id="fileInput" accept=".txt">
         <button id="btnIniciar" class="btn-primary">🚀 Iniciar Validação</button>
     </div>
 
@@ -63,7 +63,7 @@
         linhasBrutas.forEach((conteudo, index) => {
             let limpo = conteudo.replace(/\D/g, "");
             if (limpo.length === 14) {
-                baseProcessamento.push({ doc: limpo, linha: index + 1 });
+                baseProcessamento.push({ CNPJ: limpo, linha: index + 1 });
             }
         });
 
@@ -73,7 +73,7 @@
 
         baseProcessamento.forEach(item => {
             if (vistos.has(item.doc)) {
-                baseDuplicados.push(`LINHA: ${item.linha} | DOC: ${item.doc} (Repetido da linha ${vistos.get(item.doc)})`);
+                baseDuplicados.push(`LINHA: ${item.linha} | CNPJ: ${item.doc} | NOME: ${res.nome}`);
             } else {
                 vistos.set(item.doc, item.linha);
                 unicos.push(item);
@@ -142,8 +142,8 @@
     }
 
     document.getElementById('btnExportarTudo').onclick = () => baixar(baseSucesso, "relatorio_completo.txt");
-    document.getElementById('btnExportarNaoAtivos').onclick = () => baixar(baseNaoAtivos, "nao_ativos_com_linha.txt");
-    document.getElementById('btnExportarDuplicados').onclick = () => baixar(baseDuplicados, "duplicados_com_linha.txt");
+    document.getElementById('btnExportarNaoAtivos').onclick = () => baixar(baseNaoAtivos, "nao_ativos.txt");
+    document.getElementById('btnExportarDuplicados').onclick = () => baixar(baseDuplicados, "duplicados.txt");
     document.getElementById('btnExportarErros').onclick = () => baixar(baseFalhas, "inconsistencias.txt");
 </script>
 </body>
