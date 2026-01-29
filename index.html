@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Validador de CNPJ</title>
+    <title>Validador de CNPJ Profissional</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; display: flex; justify-content: center; padding: 20px; }
         .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 950px; }
@@ -78,7 +78,7 @@
         baseProcessamento.forEach(item => {
             if (vistos.has(item.doc)) {
                 // Removi res.nome daqui, pois a API ainda não foi consultada
-                baseDuplicados.push(`LINHA ORIGINAL: ${item.linha} | CNPJ: ${item.doc} (Repetido da linha ${vistos.get(item.doc)}) |  NOME: ${res.nome}`);
+                baseDuplicados.push(`LINHA ORIGINAL: ${item.linha} | CNPJ: ${item.doc} (Repetido da linha ${vistos.get(item.doc)})`);
             } else {
                 vistos.set(item.doc, item.linha);
                 unicos.push(item);
