@@ -5,32 +5,32 @@
     <title>Validador de CNPJ</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; display: flex; justify-content: center; padding: 20px; }
-        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 900px; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 950px; }
         h2 { color: #2c3e50; text-align: center; margin-bottom: 20px; }
         .upload-section { display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; border: 2px dashed #3498db; padding: 20px; border-radius: 8px; text-align: center; }
         button { padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.3s; margin: 5px; }
         .btn-primary { background: #3498db; color: white; width: 100%; font-size: 16px; }
         .btn-success { background: #27ae60; color: white; display: none; }
         .btn-danger { background: #c0392b; color: white; display: none; }
-        .btn-warning { background: #e67e22; color: white; display: none; }
         .btn-info { background: #8e44ad; color: white; display: none; }
+        .btn-warning { background: #e67e22; color: white; display: none; }
         button:disabled { background: #bdc3c7; cursor: not-allowed; }
         .progress-container { width: 100%; background: #eee; border-radius: 10px; height: 25px; margin: 20px 0; display: none; overflow: hidden; }
         .progress-bar { height: 100%; width: 0%; background: #2ecc71; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; }
         #log { background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 5px; height: 350px; overflow-y: auto; font-family: monospace; font-size: 13px; line-height: 1.5; }
-        .status-2 { color: #2ecc71; } /* Ativa */
-        .status-8 { color: #e74c3c; } /* Baixada */
-        .duplicate-msg { color: #f1c40f; font-weight: bold; }
+        .status-2 { color: #2ecc71; }
+        .status-8 { color: #e74c3c; }
+        .line-info { color: #bdc3c7; font-size: 11px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>🏢 Validador de CNPJ</h2>
+    <h2>🏢 Validador de CNPJ (Localizador por Linha)</h2>
     
     <div class="upload-section">
         <input type="file" id="fileInput" accept=".txt">
-        <button id="btnIniciar" class="btn-primary">🚀 Iniciar Validação Única</button>
+        <button id="btnIniciar" class="btn-primary">🚀 Iniciar Validação Rastreável</button>
     </div>
 
     <div class="progress-container" id="progressCont">
@@ -41,7 +41,7 @@
 
     <div style="text-align: center; margin-top: 20px;">
         <button id="btnExportarTudo" class="btn-success">📥 Relatório Completo</button>
-        <button id="btnExportarNaoAtivos" class="btn-danger">📥 Apenas Não Ativos</button>
+        <button id="btnExportarNaoAtivos" class="btn-danger">📥 Baixar Não Ativos</button>
         <button id="btnExportarDuplicados" class="btn-info">📥 Baixar Repetidos</button>
         <button id="btnExportarErros" class="btn-warning">📥 Inconsistências</button>
     </div>
@@ -51,65 +51,66 @@
     const statusTraducao = { "1": "NULA", "2": "ATIVA", "3": "SUSPENSA", "4": "INAPTA", "8": "BAIXADA" };
     let baseSucesso = []; let baseNaoAtivos = []; let baseFalhas = []; let baseDuplicados = [];
 
-    const btnIniciar = document.getElementById('btnIniciar');
-    const log = document.getElementById('log');
-    const progressBar = document.getElementById('progressBar');
-    const progressCont = document.getElementById('progressCont');
-
     btnIniciar.onclick = async () => {
         const file = document.getElementById('fileInput').files[0];
         if (!file) return alert("Selecione um arquivo!");
 
         const texto = await file.text();
-        const todasLinhas = texto.split(/\r?\n/).map(l => l.replace(/\D/g, "")).filter(l => l.length >= 11);
+        const linhasBrutas = texto.split(/\r?\n/);
         
-        // --- LÓGICA DE IDENTIFICAÇÃO DE DUPLICADOS ---
-        const vistos = new Set();
+        // --- MAPEAMENTO COM LINHA ORIGINAL ---
+        let baseProcessamento = [];
+        linhasBrutas.forEach((conteudo, index) => {
+            let limpo = conteudo.replace(/\D/g, "");
+            if (limpo.length === 14) {
+                baseProcessamento.push({ doc: limpo, linha: index + 1 });
+            }
+        });
+
+        const vistos = new Map(); // Mapa para guardar o documento e sua primeira linha encontrada
         const unicos = [];
         baseDuplicados = [];
 
-        todasLinhas.forEach(doc => {
-            if (vistos.has(doc)) {
-                baseDuplicados.push(doc);
+        baseProcessamento.forEach(item => {
+            if (vistos.has(item.doc)) {
+                baseDuplicados.push(`LINHA: ${item.linha} | DOC: ${item.doc} (Repetido da linha ${vistos.get(item.doc)})`);
             } else {
-                vistos.add(doc);
-                unicos.push(doc);
+                vistos.set(item.doc, item.linha);
+                unicos.push(item);
             }
         });
 
         baseSucesso = []; baseNaoAtivos = []; baseFalhas = [];
-        log.innerHTML = `📄 Total de linhas: ${todasLinhas.length}<br>`;
+        document.getElementById('log').innerHTML = `📄 Linhas identificadas: ${baseProcessamento.length} | Únicos: ${unicos.length}<br><hr>`;
         
-        if (baseDuplicados.length > 0) {
-            log.innerHTML += `<span class="duplicate-msg">⚠️ Identificados ${baseDuplicados.length} registros repetidos:</span><br>`;
-            log.innerHTML += `<small style="color: #bdc3c7;">${[...new Set(baseDuplicados)].join(', ')}</small><br>`;
-            document.getElementById('btnExportarDuplicados').style.display = "inline-block";
-        }
-        
-        log.innerHTML += "<br>Iniciando validação dos registros únicos...<br><hr>";
-        progressCont.style.display = "block";
-        btnIniciar.disabled = true;
+        document.getElementById('progressCont').style.display = "block";
+        document.getElementById('btnIniciar').disabled = true;
 
         for (let i = 0; i < unicos.length; i++) {
-            const doc = unicos[i];
-            updateProgress(i + 1, unicos.length);
+            const item = unicos[i];
+            const perc = Math.round(((i + 1) / unicos.length) * 100);
+            document.getElementById('progressBar').style.width = perc + "%";
+            document.getElementById('progressBar').innerText = perc + "%";
             
-            log.innerHTML += `> Verificando ${doc}... `;
-            let res = await consultarAPI(doc);
+            document.getElementById('log').innerHTML += `<span class="line-info">[L:${item.linha}]</span> Verificando ${item.doc}... `;
+            let res = await consultarAPI(item.doc);
 
             if (res.ok) {
                 const statusTxt = statusTraducao[res.status] || res.status;
-                log.innerHTML += `<span class="status-${res.status}">[OK] ${res.nome} | ${statusTxt}</span><br>`;
+                document.getElementById('log').innerHTML += `<span class="status-${res.status}">[OK] ${res.nome} | ${statusTxt}</span><br>`;
                 
-                const linhaDados = `DOC: ${doc} | NOME: ${res.nome} | STATUS: ${statusTxt}`;
-                baseSucesso.push(linhaDados);
-                if (res.status !== "2" && res.status !== 2) baseNaoAtivos.push(linhaDados);
+                const registroCompleto = `LINHA: ${item.linha} | CNPJ: ${item.doc} | NOME: ${res.nome} | STATUS: ${statusTxt}`;
+                baseSucesso.push(registroCompleto);
+                
+                if (res.status !== "2" && res.status !== 2) {
+                    baseNaoAtivos.push(registroCompleto);
+                }
             } else {
-                log.innerHTML += `<span class="status-8">[FALHA] Não encontrado</span><br>`;
-                baseFalhas.push(doc);
+                document.getElementById('log').innerHTML += `<span class="status-8">[FALHA]</span><br>`;
+                baseFalhas.push(`LINHA: ${item.linha} | CNPJ: ${item.doc} | NOME: ${res.nome} | STATUS: ${statusTxt}`);
             }
-            log.scrollTop = log.scrollHeight;
-            await new Promise(r => setTimeout(r, 1500)); // Rate limit anti-bloqueio
+            document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+            await new Promise(r => setTimeout(r, 1500)); // Rate limit
         }
         finalizar();
     };
@@ -125,32 +126,25 @@
         return { ok: false };
     }
 
-    function updateProgress(atual, total) {
-        const perc = Math.round((atual / total) * 100);
-        progressBar.style.width = perc + "%";
-        progressBar.innerText = perc + "%";
-    }
-
     function finalizar() {
-        btnIniciar.disabled = false;
-        log.innerHTML += "<br><b>✅ Processo Concluído!</b>";
-        if (baseSucesso.length > 0) document.getElementById('btnExportarTudo').style.display = "inline-block";
+        document.getElementById('btnIniciar').disabled = false;
+        document.getElementById('log').innerHTML += "<br><b>✅ Concluído!</b>";
+        document.getElementById('btnExportarTudo').style.display = "inline-block";
         if (baseNaoAtivos.length > 0) document.getElementById('btnExportarNaoAtivos').style.display = "inline-block";
+        if (baseDuplicados.length > 0) document.getElementById('btnExportarDuplicados').style.display = "inline-block";
         if (baseFalhas.length > 0) document.getElementById('btnExportarErros').style.display = "inline-block";
     }
 
-    function baixarArquivo(conteudo, nome) {
-        const blob = new Blob([conteudo], { type: 'text/plain;charset=utf-8;' });
+    function baixar(dados, nome) {
+        const blob = new Blob([dados.join('\n')], { type: 'text/plain;charset=utf-8;' });
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = nome;
-        a.click();
+        a.href = URL.createObjectURL(blob); a.download = nome; a.click();
     }
 
-    document.getElementById('btnExportarTudo').onclick = () => baixarArquivo("--- RELATÓRIO COMPLETO ---\n" + baseSucesso.join('\n'), "relatorio_completo.txt");
-    document.getElementById('btnExportarNaoAtivos').onclick = () => baixarArquivo("--- DOCUMENTOS NÃO ATIVOS ---\n" + baseNaoAtivos.join('\n'), "nao_ativos.txt");
-    document.getElementById('btnExportarDuplicados').onclick = () => baixarArquivo("--- REGISTROS REPETIDOS IGNORADOS ---\n" + baseDuplicados.join('\n'), "duplicados.txt");
-    document.getElementById('btnExportarErros').onclick = () => baixarArquivo("--- INCONSISTÊNCIAS ---\n" + baseFalhas.join('\n'), "inconsistencias.txt");
+    document.getElementById('btnExportarTudo').onclick = () => baixar(baseSucesso, "relatorio_completo.txt");
+    document.getElementById('btnExportarNaoAtivos').onclick = () => baixar(baseNaoAtivos, "nao_ativos_com_linha.txt");
+    document.getElementById('btnExportarDuplicados').onclick = () => baixar(baseDuplicados, "duplicados_com_linha.txt");
+    document.getElementById('btnExportarErros').onclick = () => baixar(baseFalhas, "inconsistencias.txt");
 </script>
 </body>
 </html>
